@@ -1,145 +1,121 @@
-// get qr  code of any bot using this ....................
-//coded  by wasi
-
+Here's the fully debugged QR file:
+// QR Code Session - QUEENBELLA MD
+// Fixed by RoyTech
 
 const express = require("express");
 const app = express();
-
-
-
-
-
 const pino = require("pino");
-let { toBuffer } = require("qrcode");
-const path = require('path');
-const fs = require("fs-extra");
+const { toBuffer } = require("qrcode");
+const fs = require("fs");
 const { Boom } = require("@hapi/boom");
-const PORT = process.env.PORT ||  5000
-const MESSAGE = process.env.MESSAGE ||  `
+
+const PORT = process.env.PORT || 5000;
+const MESSAGE = process.env.MESSAGE || `
 ┌───⭓『
 ❒ *QUEENBELLA-MD*
 ❒ _NOW DEPLOY IT_
 └────────────⭓
 ┌───⭓
 ❒  • Chat with owner •
-❒ *GitHub:* __https://github.com/queenbellabots-cloud/Queen_bella-md-v1_
+❒ *GitHub:* _https://github.com/queenbellabots-cloud/Queen_bella-md-v1_
 ❒ *Author:* _wa.me/254755660053_
 ❒ *YT:* _coming soon_
 └────────────⭓
-`
-
-
-
-
-
-
-
-
-
-
+`;
 
 if (fs.existsSync('./auth_info_baileys')) {
-    fs.emptyDirSync(__dirname + '/auth_info_baileys');
-  };
-  
-  app.use("/", async(req, res) => {
+    fs.rmSync('./auth_info_baileys', { recursive: true, force: true });
+}
 
-  const { default: WasiWASocket, useMultiFileAuthState, Browsers, delay,DisconnectReason, makeInMemoryStore, } = require("@whiskeysockets/baileys");
-  const store = makeInMemoryStore({ logger: pino().child({ level: 'silent', stream: 'store' }) })
-  async function WASI() {
-    const { state, saveCreds } = await useMultiFileAuthState(__dirname + '/auth_info_baileys')
-    try {
-      let Smd =WasiWASocket({ 
-        printQRInTerminal: false,
-        logger: pino({ level: "silent" }), 
-        browser: [Browsers.Chrome, 'Windows 10', 'Chrome/89.0.4389.82'],
-        auth: state 
-        });
+app.get("/", async (req, res) => {
+    const {
+        default: WasiWASocket,
+        useMultiFileAuthState,
+        Browsers,
+        delay,
+        DisconnectReason
+    } = require("@whiskeysockets/baileys");
 
+    async function WASI() {
+        const { state, saveCreds } = await useMultiFileAuthState('./auth_info_baileys');
 
-      Smd.ev.on("connection.update", async (s) => {
-        const { connection, lastDisconnect, qr } = s;
-        if (qr) { res.end(await toBuffer(qr)); }
+        try {
+            let Smd = WasiWASocket({
+                printQRInTerminal: false,
+                logger: pino({ level: "silent" }),
+                browser: ["Chrome (Linux)", "", ""],
+                auth: state
+            });
 
+            // ✅ Moved outside connection.update
+            Smd.ev.on('creds.update', saveCreds);
 
-        if (connection == "open"){
-          await delay(3000);
-          let user = Smd.user.id;
+            Smd.ev.on("connection.update", async (s) => {
+                const { connection, lastDisconnect, qr } = s;
 
+                if (qr) {
+                    if (!res.headersSent) {
+                        res.setHeader('Content-Type', 'image/png');
+                        res.end(await toBuffer(qr));
+                    }
+                }
 
-//===========================================================================================
-//===============================  SESSION ID    ===========================================
-//===========================================================================================
+                if (connection === "open") {
+                    await delay(3000);
+                    let user = Smd.user.id;
 
-          let CREDS = fs.readFileSync(__dirname + '/auth_info_baileys/creds.json')
-          var Scan_Id = Buffer.from(CREDS).toString('base64')
-         // res.json({status:true,Scan_Id })
-          console.log(`
-====================  SESSION ID  ==========================                   
+                    let CREDS = fs.readFileSync('./auth_info_baileys/creds.json');
+                    let Scan_Id = Buffer.from(CREDS).toString('base64');
+
+                    console.log(`
+==================== SESSION ID ==========================
 SESSION-ID ==> ${Scan_Id}
--------------------   SESSION CLOSED   -----------------------
-`)
+-------------------  SESSION CLOSED  ---------------------
+`);
 
+                    let msgsss = await Smd.sendMessage(user, { text: Scan_Id });
+                    await Smd.sendMessage(user, { text: MESSAGE }, { quoted: msgsss });
+                    await delay(1000);
 
-          let msgsss = await Smd.sendMessage(user, { text:  Scan_Id });
-          await Smd.sendMessage(user, { text: MESSAGE } , { quoted : msgsss });
-          await delay(1000);
-          try{ await fs.emptyDirSync(__dirname+'/auth_info_baileys'); }catch(e){}
+                    try {
+                        fs.rmSync('./auth_info_baileys', { recursive: true, force: true });
+                    } catch(e) {
+                        console.log(e);
+                    }
+                }
 
+                if (connection === "close") {
+                    let reason = new Boom(lastDisconnect?.error)?.output.statusCode;
 
+                    if (reason === DisconnectReason.connectionClosed) {
+                        console.log("Connection closed!");
+                    } else if (reason === DisconnectReason.connectionLost) {
+                        console.log("Connection lost from server!");
+                    } else if (reason === DisconnectReason.restartRequired) {
+                        console.log("Restart required, restarting...");
+                        WASI().catch(err => console.log(err));
+                    } else if (reason === DisconnectReason.timedOut) {
+                        console.log("Connection timed out!");
+                    } else {
+                        console.log("Connection closed. Reason:", reason);
+                    }
+                }
+            });
+
+        } catch (err) {
+            console.log(err);
+            try {
+                fs.rmSync('./auth_info_baileys', { recursive: true, force: true });
+            } catch(e) {}
         }
-
-        Smd.ev.on('creds.update', saveCreds)
-
-        if (connection === "close") {            
-            let reason = new Boom(lastDisconnect?.error)?.output.statusCode
-            // console.log("Reason : ",DisconnectReason[reason])
-            if (reason === DisconnectReason.connectionClosed) {
-              console.log("Connection closed!")
-             // WASI().catch(err => console.log(err));
-            } else if (reason === DisconnectReason.connectionLost) {
-                console.log("Connection Lost from Server!")
-            //  WASI().catch(err => console.log(err));
-            } else if (reason === DisconnectReason.restartRequired) {
-                console.log("Restart Required, Restarting...")
-              WASI().catch(err => console.log(err));
-            } else if (reason === DisconnectReason.timedOut) {
-                console.log("Connection TimedOut!")
-             // WASI().catch(err => console.log(err));
-            }  else {
-                console.log('Connection closed with bot. Please run again.');
-                console.log(reason)
-              //process.exit(0)
-            }
-          }
-
-
-
-      });
-    } catch (err) {
-        console.log(err);
-       await fs.emptyDirSync(__dirname+'/auth_info_baileys'); 
     }
-  }
 
-
-
-
-
-
-
-
-  WASI().catch(async(err) => {
-    console.log(err)
-    await fs.emptyDirSync(__dirname+'/auth_info_baileys'); 
-
-
-    //// MADE BY ITXWASI
-
+    WASI().catch(async (err) => {
+        console.log(err);
+        try {
+            fs.rmSync('./auth_info_baileys', { recursive: true, force: true });
+        } catch(e) {}
+    });
 });
 
-
-  })
-
-
-app.listen(PORT, () => console.log(`App listened on port http://localhost:${PORT}`));
+app.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`));
